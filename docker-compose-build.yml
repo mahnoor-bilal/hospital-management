@@ -1,0 +1,60 @@
+services:
+
+  app:
+    build:
+      context: .                  
+      dockerfile: Dockerfile      
+      target: production          
+    image: mahnoorbilal/hospital-management:latest
+    container_name: hms_app_build
+    restart: "no"                
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongo:27017/hospital_management
+      - JWT_SECRET=ci_test_secret_not_for_production
+      - JWT_EXPIRE=7d
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - hms_build_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  mongo:
+    image: mongo:7.0
+    container_name: hms_mongo_build
+    restart: "no"
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=hospital_management
+    volumes:
+      - mongo_build_data:/data/db       
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - hms_build_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+volumes:
+  mongo_build_data:
+    driver: local
+    name: hms_mongo_build_data      
+
+networks:
+  hms_build_network:
+    driver: bridge
+    name: hms_build_network
