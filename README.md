@@ -259,5 +259,4 @@ docker-compose pull && docker-compose up -d
 └─────────────────────────────────────┘
 ```
 "# trigger" 
-this is to 
-test trigger
+trigger check
