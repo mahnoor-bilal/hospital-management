@@ -1,47 +1,69 @@
+# ─────────────────────────────────────────────────────────────
+# docker-compose-build.yml
+# Purpose : Used by Jenkins to BUILD and TEST the image locally
+#           before pushing to Docker Hub.
+# Usage   : docker-compose -f docker-compose-build.yml up --build
+# ─────────────────────────────────────────────────────────────
+
 services:
-  app_build:
-    image: node:18-slim
+
+  # ── Web Application (built from local source) ──────────────
+  app:
+    build:
+      context: .                  # project root
+      dockerfile: Dockerfile      # your Dockerfile
+      target: production          # multi-stage: use production stage
+    image: mahnoorbilal/hospital-management:latest
     container_name: hms_app_build
-    restart: unless-stopped
-    working_dir: /app
-    volumes:
-      - ./:/app                 
+    restart: "no"                 # no restart in CI — fail fast
     ports:
-      - "5001:5000"              
+      - "5000:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - MONGODB_URI=mongodb://mongo_build:27017/hospital_management
-      - JWT_SECRET=change_this_secret_in_production
+      - MONGODB_URI=mongodb://mongo:27017/hospital_management
+      - JWT_SECRET=ci_test_secret_not_for_production
       - JWT_EXPIRE=7d
-    command: sh -c "npm install && node server.js"
     depends_on:
-      - mongo_build
+      mongo:
+        condition: service_healthy
     networks:
       - hms_build_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  mongo_build:
+  # ── MongoDB (for build/test only) ──────────────────────────
+  mongo:
     image: mongo:7.0
     container_name: hms_mongo_build
-    restart: unless-stopped
+    restart: "no"
     ports:
-      - "27018:27017"            
+      - "27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=hospital_management
     volumes:
-      - mongo_build_data:/data/db
-      - mongo_build_config:/data/configdb
+      - mongo_build_data:/data/db       # separate volume — won't touch production data
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - hms_build_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
+# ── Volumes ────────────────────────────────────────────────
 volumes:
   mongo_build_data:
     driver: local
-    name: hms_mongo_build_data
-  mongo_build_config:
-    driver: local
-    name: hms_mongo_build_config
+    name: hms_mongo_build_data      # separate from production volume
 
+# ── Networks ───────────────────────────────────────────────
 networks:
   hms_build_network:
     driver: bridge
