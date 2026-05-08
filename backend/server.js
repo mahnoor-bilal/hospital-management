@@ -20,7 +20,7 @@ app.use('/api/billing', require('./routes/billing'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 
-// Health check endpoint (used by Docker & load balancers)
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
